@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>RIDGE RUNNER — Off-Road Truck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --near-black:#12100d;
+    --mud-dark:#221a14;
+    --mud:#3d2e20;
+    --rust:#b5451f;
+    --orange:#ff7a1a;
+    --yellow:#ffd23f;
+    --cream:#eee3cf;
+    --danger:#e0432b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+  html,body{
+    margin:0;padding:0;width:100%;height:100%;overflow:hidden;
+    background:var(--near-black);
+    font-family:'Barlow Condensed',sans-serif;
+    touch-action:none;
+    overscroll-behavior:none;
+  }
+  #gameCanvas{display:block;width:100%;height:100%;}
+
+  .display{font-family:'Rajdhani',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+
+  /* ---- tire tread signature divider ---- */
+  .tread{
+    height:6px;width:100%;
+    background-image:repeating-linear-gradient(115deg,var(--yellow) 0 8px, transparent 8px 16px);
+    opacity:.85;
+    border-radius:2px;
+  }
+
+  /* ---- HUD ---- */
+  #hud{
+    position:fixed;top:0;left:0;right:0;
+    display:flex;justify-content:space-between;align-items:flex-start;
+    padding:calc(10px + env(safe-area-inset-top)) 14px 0 14px;
+    pointer-events:none;
+    z-index:5;
+    opacity:0;transition:opacity .3s;
+  }
+  #hud.show{opacity:1;}
+  .hud-panel{
+    background:linear-gradient(180deg, rgba(34,26,20,.88), rgba(18,16,13,.88));
+    border:1px solid rgba(255,210,63,.25);
+    border-radius:10px;
+    padding:8px 12px 6px 12px;
+    min-width:130px;
+  }
+  .hud-label{font-size:11px;letter-spacing:.15em;color:var(--yellow);opacity:.8;font-family:'Rajdhani',sans-serif;font-weight:600;}
+  .hud-value{font-size:clamp(20px,4vw,28px);color:var(--cream);font-family:'Rajdhani',sans-serif;font-weight:700;line-height:1.1;}
+  #fuelWrap{width:120px;}
+  #fuelTrack{
+    margin-top:4px;height:10px;border-radius:5px;overflow:hidden;
+    background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.15);
+  }
+  #fuelBar{height:100%;width:100%;background:linear-gradient(90deg,var(--danger),var(--orange),var(--yellow));transition:width .15s linear;}
+
+  /* ---- overlays ---- */
+  .overlay{
+    position:fixed;inset:0;z-index:10;
+    display:flex;align-items:center;justify-content:center;
+    background:
+      radial-gradient(ellipse at 50% 20%, rgba(255,122,26,.18), transparent 60%),
+      rgba(10,8,6,.72);
+    backdrop-filter:blur(3px);
+    opacity:1;transition:opacity .35s ease;
+  }
+  .overlay.hidden{opacity:0;pointer-events:none;}
+  .panel{
+    width:min(440px,88vw);
+    text-align:center;
+    padding:28px 26px 24px;
+    background:linear-gradient(180deg, rgba(61,46,32,.9), rgba(24,18,13,.95));
+    border:1px solid rgba(255,210,63,.3);
+    border-radius:16px;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .eyebrow{color:var(--yellow);font-size:13px;letter-spacing:.35em;font-family:'Rajdhani',sans-serif;font-weight:600;}
+  h1.title{
+    margin:6px 0 4px;color:var(--cream);
+    font-size:clamp(32px,8vw,48px);
+    letter-spacing:.02em;
+    text-shadow:0 3px 0 var(--rust), 0 6px 18px rgba(0,0,0,.5);
+  }
+  .sub{color:#c9b9a3;font-size:16px;margin-bottom:16px;font-weight:500;}
+  .btn{
+    font-family:'Rajdhani',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+    font-size:20px;color:var(--near-black);
+    background:linear-gradient(180deg,var(--yellow),var(--orange));
+    border:none;border-radius:10px;
+    padding:14px 30px;margin-top:6px;
+    cursor:pointer;
+    box-shadow:0 6px 0 #a3480f, 0 10px 20px rgba(0,0,0,.4);
+    transition:transform .08s ease;
+  }
+  .btn:active{transform:translateY(4px);box-shadow:0 2px 0 #a3480f, 0 4px 10px rgba(0,0,0,.4);}
+  .howto{
+    display:flex;justify-content:center;gap:18px;margin:16px 0 6px;
+    color:#c9b9a3;font-size:14px;
+  }
+  .howto b{color:var(--yellow);display:block;font-family:'Rajdhani',sans-serif;font-size:15px;}
+  .statsRow{display:flex;justify-content:center;gap:28px;margin:14px 0 6px;}
+  .statBox .hud-value{color:var(--yellow);}
+  .statBox .hud-label{color:#c9b9a3;}
+
+  /* ---- difficulty selector ---- */
+  #diffRow{display:flex;justify-content:center;gap:8px;margin:14px 0 4px;}
+  .diffBtn{
+    font-family:'Rajdhani',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+    font-size:14px;color:#c9b9a3;
+    background:rgba(0,0,0,.3);
+    border:1px solid rgba(255,210,63,.25);
+    border-radius:8px;
+    padding:8px 14px;
+    cursor:pointer;
+  }
+  .diffBtn.active{
+    color:var(--near-black);
+    background:linear-gradient(180deg,var(--yellow),var(--orange));
+    border-color:transparent;
+  }
+
+  /* ---- touch controls ---- */
+  #controls{
+    position:fixed;left:0;right:0;bottom:0;
+    display:flex;justify-content:space-between;align-items:flex-end;
+    padding:0 18px calc(18px + env(safe-area-inset-bottom));
+    z-index:5;pointer-events:none;
+    opacity:0;transition:opacity .3s;
+  }
+  #controls.show{opacity:1;}
+  .padBtn{
+    pointer-events:auto;
+    width:clamp(70px,18vw,96px);height:clamp(70px,18vw,96px);
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;flex-direction:column;
+    font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--cream);
+    border:4px solid rgba(255,210,63,.35);
+    background:radial-gradient(circle at 35% 30%, rgba(80,60,42,.9), rgba(20,16,12,.9));
+    box-shadow:0 8px 18px rgba(0,0,0,.45), inset 0 0 0 6px rgba(0,0,0,.25);
+    background-image:
+      repeating-conic-gradient(rgba(255,210,63,.12) 0deg 6deg, transparent 6deg 18deg),
+      radial-gradient(circle at 35% 30%, rgba(80,60,42,.95), rgba(20,16,12,.95));
+    font-size:13px;letter-spacing:.08em;text-transform:uppercase;
+    user-select:none;-webkit-user-select:none;
+    transition:transform .06s ease, filter .06s ease;
+  }
+  .padBtn svg{width:34%;height:34%;margin-bottom:2px;opacity:.9;}
+  .padBtn.active{transform:scale(.92);filter:brightness(1.35);}
+  #gasBtn{border-color:rgba(255,122,26,.55);}
+  #gasBtn.active{background-color:rgba(255,122,26,.25);}
+  #brakeBtn.active{background-color:rgba(224,67,43,.25);}
+
+  #distTicker{
+    position:fixed;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);
+    z-index:5;pointer-events:none;text-align:center;opacity:0;transition:opacity .3s;
+  }
+  #distTicker.show{opacity:1;}
+  #distTicker .hud-value{font-size:clamp(22px,5vw,30px);}
+
+  #crashFlash{
+    position:fixed;inset:0;background:var(--danger);opacity:0;pointer-events:none;z-index:8;
+  }
+
+  @media (max-width:480px){
+    .hud-panel{padding:6px 9px 5px;min-width:96px;}
+    .hud-label{font-size:9px;}
+    #fuelWrap{width:88px;}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="crashFlash"></div>
+
+<div id="distTicker" class="hud-panel">
+  <div class="hud-label">DISTANCE</div>
+  <div class="hud-value"><span id="distVal">0</span> m</div>
+</div>
+
+<div id="hud">
+  <div class="hud-panel" id="fuelWrap">
+    <div class="hud-label">FUEL</div>
+    <div id="fuelTrack"><div id="fuelBar"></div></div>
+  </div>
+  <div class="hud-panel">
+    <div class="hud-label">COINS</div>
+    <div class="hud-value">🪙 <span id="coinVal">0</span></div>
+  </div>
+</div>
+
+<div id="controls">
+  <button id="brakeBtn" class="padBtn" aria-label="Reverse / Brake">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#eee3cf" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+    BACK
+  </button>
+  <button id="gasBtn" class="padBtn" aria-label="Gas">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#ffd23f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    GAS
+  </button>
+</div>
+
+<!-- START SCREEN -->
+<div id="startOverlay" class="overlay">
+  <div class="panel">
+    <div class="eyebrow">DUSK CANYON TRAIL</div>
+    <h1 class="title display">RIDGE RUNNER</h1>
+    <div class="tread"></div>
+    <p class="sub">Keep your rig upright, chase the horizon, don't run dry.</p>
+    <div class="howto">
+      <div><b>GAS / →</b>Accelerate</div>
+      <div><b>BACK / ←</b>Reverse &amp; brake</div>
+      <div><b>🪙</b>Collect for score</div>
+    </div>
+    <div class="hud-label" style="margin-top:4px;">TERRAIN</div>
+    <div id="diffRow">
+      <button class="diffBtn" data-diff="easy">Easy</button>
+      <button class="diffBtn active" data-diff="normal">Normal</button>
+      <button class="diffBtn" data-diff="hard">Hard</button>
+    </div>
+    <button class="btn" id="startBtn">Start Engine</button>
+    <div style="margin-top:12px;color:#8a7a66;font-size:13px;">Best distance: <span id="bestStart">0</span> m</div>
+  </div>
+</div>
+
+<!-- GAME OVER SCREEN -->
+<div id="overOverlay" class="overlay hidden">
+  <div class="panel">
+    <div class="eyebrow" id="overReason">ROLLED OVER</div>
+    <h1 class="title display">WIPEOUT</h1>
+    <div class="tread"></div>
+    <div class="statsRow">
+      <div class="statBox"><div class="hud-label">DISTANCE</div><div class="hud-value"><span id="finalDist">0</span> m</div></div>
+      <div class="statBox"><div class="hud-label">COINS</div><div class="hud-value"><span id="finalCoins">0</span></div></div>
+      <div class="statBox"><div class="hud-label">BEST</div><div class="hud-value"><span id="finalBest">0</span> m</div></div>
+    </div>
+    <button class="btn" id="retryBtn">Try Again</button>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------- Canvas / sizing ---------------- */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W*DPR; canvas.height = H*DPR;
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------------- Terrain generation ---------------- */
+const SEGMENT = 110;
+const GROUND_BASE_FRAC = 0.66; // fraction of screen height for baseline ground
+let terrain = []; // {y} control points, index*SEGMENT = world x
+
+const DIFFICULTY = {
+  easy:   { startAmp:20, maxAmp:48,  ampGrow:4200, flatChance:0.30, clamp:110 },
+  normal: { startAmp:34, maxAmp:70,  ampGrow:2600, flatChance:0.12, clamp:150 },
+  hard:   { startAmp:46, maxAmp:98,  ampGrow:1500, flatChance:0.05, clamp:190 },
+};
+let difficulty = 'normal';
+
+function pushPoint(){
+  const cfg = DIFFICULTY[difficulty];
+  const i = terrain.length;
+  let prevY = i>0 ? terrain[i-1].y : 0;
+  let dist = i*SEGMENT;
+  // difficulty ramps up slowly, then plateaus
+  let amp = Math.min(cfg.maxAmp, cfg.startAmp + dist/cfg.ampGrow);
+  let maxDelta = amp;
+  // occasional flat stretch for breathing room
+  let flatChance = (i>2 && i%9===0) ? Math.max(0.4, cfg.flatChance) : cfg.flatChance;
+  let delta;
+  if(Math.random() < flatChance){
+    delta = (Math.random()-0.5)*10;
+  } else {
+    delta = (Math.random()-0.5)*2*maxDelta;
+  }
+  let y = prevY + delta;
+  y = Math.max(-cfg.clamp, Math.min(cfg.clamp*1.05, y));
+  if(i<4) y = prevY*0.4; // gentle start
+  terrain.push({y});
+}
+for(let k=0;k<6;k++) pushPoint();
+
+function ensureTerrain(worldX){
+  while(terrain.length*SEGMENT < worldX + W + SEGMENT*4){
+    pushPoint();
+  }
+}
+function smoothstep(t){ return t*t*(3-2*t); }
+function groundY(worldX){
+  const idx = Math.floor(worldX/SEGMENT);
+  const i0 = Math.max(0,idx), i1 = Math.min(terrain.length-1, idx+1);
+  const t = smoothstep(Math.max(0,Math.min(1,(worldX - i0*SEGMENT)/SEGMENT)));
+  const y0 = terrain[i0].y, y1 = terrain[i1].y;
+  return (H*GROUND_BASE_FRAC) + y0 + (y1-y0)*t;
+}
+
+/* ---------------- Collectibles ---------------- */
+let coins = [];
+let fuelPickups = [];
+let nextCoinX = 500;
+let nextFuelX = 1400;
+
+function maybeSpawnCoins(worldX){
+  while(nextCoinX < worldX + W + 400){
+    if(Math.random() < 0.85){
+      const gx = nextCoinX;
+      const gy = groundY(gx) - 46 - Math.random()*26;
+      coins.push({x:gx,y:gy,taken:false,spin:Math.random()*Math.PI*2});
+    }
+    nextCoinX += 170 + Math.random()*160;
+  }
+  while(nextFuelX < worldX + W + 400){
+    fuelPickups.push({x:nextFuelX, y:groundY(nextFuelX)-34, taken:false});
+    nextFuelX += 1100 + Math.random()*900;
+  }
+}
+
+/* ---------------- Dust particles (landing impact feedback) ---------------- */
+let dustParticles = [];
+function spawnDust(worldX, y, count){
+  for(let i=0;i<count;i++){
+    dustParticles.push({
+      x: worldX + (Math.random()-0.5)*14,
+      y: y,
+      vx: (Math.random()-0.5)*90 - truck.speed*0.12,
+      vy: -Math.random()*70 - 20,
+      life: 0.45 + Math.random()*0.25,
+      maxLife: 0.7,
+      r: 4 + Math.random()*4,
+    });
+  }
+}
+function updateDust(dt){
+  for(const p of dustParticles){
+    p.vy += 260*dt;
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.life -= dt;
+  }
+  dustParticles = dustParticles.filter(p=> p.life>0);
+}
+function drawDust(worldX){
+  for(const p of dustParticles){
+    const sx = p.x - worldX;
+    if(sx<-30||sx>W+30) continue;
+    const t = Math.max(0, p.life/p.maxLife);
+    ctx.save();
+    ctx.globalAlpha = t*0.55;
+    ctx.fillStyle = '#cbb79a';
+    ctx.beginPath(); ctx.arc(sx, p.y, p.r*(1.3-t*0.5), 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+/* ---------------- Truck state ---------------- */
+const WHEEL_BASE = 92;
+const WHEEL_R = 21;
+const TRUCK_SCREEN_X = ()=> W*0.32;
+
+let truck = {
+  worldX:0,
+  speed:0,
+  wheelYRear:0, wheelYFront:0,
+  velRear:0, velFront:0,
+  angle:0,
+  spin:0,
+  airTime:0,
+};
+
+let fuel=100, coinsCollected=0, distanceM=0;
+let state='start'; // start | playing | over
+let bestDistance = parseInt(localStorage.getItem('ridgeRunnerBest')||'0',10);
+document.getElementById('bestStart').textContent = bestDistance;
+
+function resetGame(){
+  terrain=[]; for(let k=0;k<6;k++) pushPoint();
+  coins=[]; fuelPickups=[]; nextCoinX=500; nextFuelX=1400; dustParticles=[];
+  truck.worldX=0; truck.speed=0;
+  truck.wheelYRear = groundY(TRUCK_SCREEN_X()-WHEEL_BASE/2) - WHEEL_R;
+  truck.wheelYFront = groundY(TRUCK_SCREEN_X()+WHEEL_BASE/2) - WHEEL_R;
+  truck.velRear=0; truck.velFront=0; truck.angle=0; truck.spin=0; truck.airTime=0;
+  fuel=100; coinsCollected=0; distanceM=0;
+  updateHUD();
+}
+resetGame();
+
+/* ---------------- Input ---------------- */
+let input = {gas:false, brake:false};
+
+function bindPad(el, key){
+  const on = (e)=>{ e.preventDefault(); input[key]=true; el.classList.add('active'); };
+  const off = (e)=>{ e.preventDefault(); input[key]=false; el.classList.remove('active'); };
+  el.addEventListener('pointerdown', on);
+  el.addEventListener('pointerup', off);
+  el.addEventListener('pointerleave', off);
+  el.addEventListener('pointercancel', off);
+  el.addEventListener('contextmenu', e=>e.preventDefault());
+}
+bindPad(document.getElementById('gasBtn'), 'gas');
+bindPad(document.getElementById('brakeBtn'), 'brake');
+
+window.addEventListener('keydown', (e)=>{
+  if(['ArrowRight','KeyD','KeyW'].includes(e.code)) input.gas=true;
+  if(['ArrowLeft','KeyA','KeyS','Space'].includes(e.code)) input.brake=true;
+  if(e.code==='Space') e.preventDefault();
+});
+window.addEventListener('keyup', (e)=>{
+  if(['ArrowRight','KeyD','KeyW'].includes(e.code)) input.gas=false;
+  if(['ArrowLeft','KeyA','KeyS','Space'].includes(e.code)) input.brake=false;
+});
+
+/* ---------------- Audio (tiny, synthesized) ---------------- */
+let actx=null;
+function sfx(freq, dur, type, vol){
+  try{
+    if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = actx.createOscillator(); const g = actx.createGain();
+    o.type=type||'square'; o.frequency.value=freq;
+    g.gain.value=vol||0.06;
+    o.connect(g); g.connect(actx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime+dur);
+    o.stop(actx.currentTime+dur+0.02);
+  }catch(e){}
+}
+function coinSound(){ sfx(880,0.09,'triangle',0.07); setTimeout(()=>sfx(1320,0.09,'triangle',0.06),60); }
+function crashSound(){ sfx(90,0.35,'sawtooth',0.12); }
+function fuelSound(){ sfx(500,0.12,'sine',0.07); setTimeout(()=>sfx(700,0.14,'sine',0.06),80); }
+
+/* ---------------- UI wiring ---------------- */
+const hud = document.getElementById('hud');
+const distTicker = document.getElementById('distTicker');
+const controlsEl = document.getElementById('controls');
+const startOverlay = document.getElementById('startOverlay');
+const overOverlay = document.getElementById('overOverlay');
+const crashFlash = document.getElementById('crashFlash');
+
+document.querySelectorAll('.diffBtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    difficulty = btn.dataset.diff;
+    document.querySelectorAll('.diffBtn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+document.getElementById('startBtn').addEventListener('click', ()=>{
+  resetGame();
+  state='playing';
+  startOverlay.classList.add('hidden');
+  hud.classList.add('show'); distTicker.classList.add('show'); controlsEl.classList.add('show');
+  if(actx) actx.resume();
+});
+document.getElementById('retryBtn').addEventListener('click', ()=>{
+  resetGame();
+  state='playing';
+  overOverlay.classList.add('hidden');
+  hud.classList.add('show'); distTicker.classList.add('show'); controlsEl.classList.add('show');
+});
+
+function updateHUD(){
+  document.getElementById('distVal').textContent = Math.floor(distanceM);
+  document.getElementById('coinVal').textContent = coinsCollected;
+  document.getElementById('fuelBar').style.width = Math.max(0,fuel)+'%';
+}
+
+function endGame(reason){
+  state='over';
+  hud.classList.remove('show'); distTicker.classList.remove('show'); controlsEl.classList.remove('show');
+  if(Math.floor(distanceM) > bestDistance){
+    bestDistance = Math.floor(distanceM);
+    localStorage.setItem('ridgeRunnerBest', bestDistance);
+  }
+  document.getElementById('overReason').textContent = reason;
+  document.getElementById('finalDist').textContent = Math.floor(distanceM);
+  document.getElementById('finalCoins').textContent = coinsCollected;
+  document.getElementById('finalBest').textContent = bestDistance;
+  overOverlay.classList.remove('hidden');
+  crashFlash.style.transition='none'; crashFlash.style.opacity='0.55';
+  requestAnimationFrame(()=>{ crashFlash.style.transition='opacity .5s'; crashFlash.style.opacity='0'; });
+  crashSound();
+}
+
+/* ---------------- Physics update ---------------- */
+const ACCEL = 620, BRAKE_DECEL = 900, FRICTION = 380, MAX_SPEED=560, MAX_REV=-260;
+const SPRING_K = 340, SPRING_D = 26;
+const GRAVITY = 1750;          // px/s^2 — pulls wheels down when airborne
+const AIR_THRESHOLD = 30;      // gap (px) beyond which a grounded wheel takes off
+const LANDING_ABSORB = 0.18;   // how much velocity survives a landing impact
+
+function updatePhysics(dt){
+  ensureTerrain(truck.worldX);
+  maybeSpawnCoins(truck.worldX);
+
+  // longitudinal
+  if(input.gas) truck.speed += ACCEL*dt;
+  else if(input.brake) truck.speed -= BRAKE_DECEL*dt;
+  // friction toward zero
+  if(!input.gas && !input.brake){
+    if(truck.speed>0) truck.speed = Math.max(0, truck.speed - FRICTION*dt);
+    else truck.speed = Math.min(0, truck.speed + FRICTION*dt);
+  }
+  truck.speed = Math.max(MAX_REV, Math.min(MAX_SPEED, truck.speed));
+  truck.worldX += truck.speed*dt;
+  if(truck.worldX<0){ truck.worldX=0; if(truck.speed<0) truck.speed=0; }
+
+  distanceM = truck.worldX/12;
+  fuel -= dt*(2.0 + Math.abs(truck.speed)/260);
+  if(fuel<0) fuel=0;
+
+  const sx = TRUCK_SCREEN_X();
+  const rearWorld = truck.worldX - WHEEL_BASE/2;
+  const frontWorld = truck.worldX + WHEEL_BASE/2;
+  const targetRear = groundY(rearWorld) - WHEEL_R;
+  const targetFront = groundY(frontWorld) - WHEEL_R;
+
+  // ---- per-wheel physics: gravity is always pulling down, the suspension spring always
+  // resists it and is hard-clamped so a wheel can never separate from continuous terrain ----
+  updateWheel('Rear', rearWorld, targetRear, dt);
+  updateWheel('Front', frontWorld, targetFront, dt);
+
+  function updateWheel(tag, worldPos, target, dt){
+    const posKey='wheelY'+tag, velKey='vel'+tag;
+    const accel = GRAVITY + SPRING_K*(target - truck[posKey]) - SPRING_D*truck[velKey];
+    truck[velKey] += accel*dt;
+    truck[posKey] += truck[velKey]*dt;
+    // hard floor: the wheel can never sink past the ground surface directly beneath it
+    if(truck[posKey] > target){
+      const impactVel = truck[velKey];
+      truck[posKey] = target;
+      truck[velKey] *= LANDING_ABSORB;
+      if(impactVel > 260) spawnDust(worldPos, target+WHEEL_R, Math.min(10, Math.floor(impactVel/90)));
+    }
+  }
+
+  const targetAngle = Math.atan2(truck.wheelYFront - truck.wheelYRear, WHEEL_BASE);
+  truck.angle += (targetAngle - truck.angle)*Math.min(1, 14*dt);
+  truck.spin += truck.speed*dt*0.05;
+
+  // airborne tracking (gap between the wheel and the ground it's chasing) — used for HUD/effects only
+  const gapNow = Math.max(0, targetRear-truck.wheelYRear) + Math.max(0, targetFront-truck.wheelYFront);
+  truck.airTime = gapNow>18 ? truck.airTime+dt : 0;
+  updateDust(dt);
+
+  // flip crash check
+  if(Math.abs(truck.angle) > 1.35){
+    endGame('ROLLED OVER');
+    return;
+  }
+
+  // coin collisions
+  const bodyScreenY = (truck.wheelYRear+truck.wheelYFront)/2 - 20;
+  for(const c of coins){
+    if(c.taken) continue;
+    const dx = c.x - truck.worldX, dy = c.y - bodyScreenY;
+    if(Math.abs(dx) < 46 && Math.abs(dy) < 40){
+      c.taken=true; coinsCollected++; coinSound();
+    }
+    c.spin += dt*4;
+  }
+  for(const f of fuelPickups){
+    if(f.taken) continue;
+    const dx = f.x - truck.worldX, dy = f.y - bodyScreenY;
+    if(Math.abs(dx) < 46 && Math.abs(dy) < 40){
+      f.taken=true; fuel = Math.min(100, fuel+34); fuelSound();
+    }
+  }
+  coins = coins.filter(c=> c.x > truck.worldX-400);
+  fuelPickups = fuelPickups.filter(f=> f.x > truck.worldX-400);
+
+  if(fuel<=0){
+    endGame('OUT OF FUEL');
+    return;
+  }
+  updateHUD();
+}
+
+/* ---------------- Rendering ---------------- */
+function drawSky(){
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#20223f');
+  g.addColorStop(0.45,'#5c3a55');
+  g.addColorStop(0.75,'#c85a3a');
+  g.addColorStop(1,'#ffb24a');
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,W,H);
+
+  // sun
+  ctx.save();
+  ctx.globalAlpha=0.9;
+  const sunG = ctx.createRadialGradient(W*0.78,H*0.32,4,W*0.78,H*0.32,90);
+  sunG.addColorStop(0,'#fff3c4'); sunG.addColorStop(1,'rgba(255,210,63,0)');
+  ctx.fillStyle=sunG;
+  ctx.beginPath(); ctx.arc(W*0.78,H*0.32,90,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawParallaxMountains(worldX){
+  const layers=[
+    {speed:0.06, base:H*0.58, amp:60, color:'rgba(40,26,34,0.55)', seed:1},
+    {speed:0.14, base:H*0.62, amp:80, color:'rgba(58,32,34,0.7)', seed:7},
+  ];
+  layers.forEach(layer=>{
+    ctx.beginPath();
+    ctx.moveTo(0,H);
+    const step=60;
+    for(let x=0;x<=W+step;x+=step){
+      const wx = worldX*layer.speed + x;
+      const y = layer.base - (Math.sin(wx*0.004+layer.seed)*layer.amp + Math.sin(wx*0.011+layer.seed*2)*layer.amp*0.4);
+      ctx.lineTo(x,y);
+    }
+    ctx.lineTo(W,H); ctx.closePath();
+    ctx.fillStyle=layer.color; ctx.fill();
+  });
+}
+
+function drawGround(worldX){
+  ctx.beginPath();
+  ctx.moveTo(0,H);
+  const step=8;
+  for(let sx=0; sx<=W+step; sx+=step){
+    const wx = worldX+sx;
+    ctx.lineTo(sx, groundY(wx));
+  }
+  ctx.lineTo(W,H); ctx.closePath();
+  const g = ctx.createLinearGradient(0,H*GROUND_BASE_FRAC-100,0,H);
+  g.addColorStop(0,'#4a3320');
+  g.addColorStop(1,'#1c130c');
+  ctx.fillStyle=g; ctx.fill();
+
+  // tire-tread style top ridge stroke
+  ctx.beginPath();
+  for(let sx=0; sx<=W+step; sx+=step){
+    const wx = worldX+sx;
+    const y = groundY(wx);
+    if(sx===0) ctx.moveTo(sx,y); else ctx.lineTo(sx,y);
+  }
+  ctx.strokeStyle='rgba(255,210,63,0.5)';
+  ctx.lineWidth=3;
+  ctx.stroke();
+}
+
+function drawCoin(c, worldX){
+  const sx = c.x - worldX;
+  if(sx<-40||sx>W+40) return;
+  if(c.taken) return;
+  const scale = Math.abs(Math.cos(c.spin));
+  ctx.save();
+  ctx.translate(sx, c.y + Math.sin(c.spin*0.6)*4);
+  ctx.scale(Math.max(0.15,scale),1);
+  ctx.beginPath(); ctx.arc(0,0,14,0,Math.PI*2);
+  ctx.fillStyle='#ffd23f'; ctx.fill();
+  ctx.strokeStyle='#a3701a'; ctx.lineWidth=2; ctx.stroke();
+  ctx.restore();
+}
+function drawFuel(f, worldX){
+  const sx = f.x-worldX;
+  if(sx<-40||sx>W+40||f.taken) return;
+  ctx.save();
+  ctx.translate(sx,f.y);
+  ctx.fillStyle='#e0432b';
+  ctx.fillRect(-10,-14,20,28);
+  ctx.fillStyle='#ffd23f';
+  ctx.fillRect(-10,-14,20,6);
+  ctx.strokeStyle='#3d2e20'; ctx.lineWidth=2;
+  ctx.strokeRect(-10,-14,20,28);
+  ctx.restore();
+}
+
+function drawTruck(){
+  const sx = TRUCK_SCREEN_X();
+  const rearX = sx - WHEEL_BASE/2, frontX = sx + WHEEL_BASE/2;
+  const rearY = truck.wheelYRear, frontY = truck.wheelYFront;
+  const cx=(rearX+frontX)/2, cy=(rearY+frontY)/2;
+
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(truck.angle);
+
+  // suspension struts
+  ctx.strokeStyle='#8a8a8a'; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.moveTo(-WHEEL_BASE/2, WHEEL_R-2); ctx.lineTo(-WHEEL_BASE/2+6,-16); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(WHEEL_BASE/2, WHEEL_R-2); ctx.lineTo(WHEEL_BASE/2-6,-16); ctx.stroke();
+
+  // chassis / body
+  ctx.fillStyle='#b5451f';
+  roundRect(-58,-46,116,34,8); ctx.fill();
+  ctx.fillStyle='#e0432b';
+  roundRect(-30,-70,58,32,7); ctx.fill();
+  // windshield
+  ctx.fillStyle='rgba(210,235,255,0.85)';
+  roundRect(-22,-64,30,20,4); ctx.fill();
+  // roll bar
+  ctx.strokeStyle='#2a2118'; ctx.lineWidth=5; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-30,-70); ctx.lineTo(-30,-92); ctx.lineTo(20,-92); ctx.lineTo(20,-70); ctx.stroke();
+  // bumper accent
+  ctx.fillStyle='#ffd23f';
+  ctx.fillRect(-58,-16,116,6);
+
+  ctx.restore();
+
+  // wheels (world-space, not rotated with body for readability)
+  drawWheel(rearX, rearY, truck.spin);
+  drawWheel(frontX, frontY, truck.spin);
+}
+
+function drawWheel(x,y,spin){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(spin);
+  ctx.beginPath(); ctx.arc(0,0,WHEEL_R,0,Math.PI*2);
+  ctx.fillStyle='#161311'; ctx.fill();
+  ctx.strokeStyle='#3d2e20'; ctx.lineWidth=3; ctx.stroke();
+  // tread spokes
+  ctx.strokeStyle='#5a4a38'; ctx.lineWidth=3;
+  for(let i=0;i<6;i++){
+    const a = i*Math.PI/3;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a)*6, Math.sin(a)*6);
+    ctx.lineTo(Math.cos(a)*WHEEL_R, Math.sin(a)*WHEEL_R);
+    ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2);
+  ctx.fillStyle='#ffd23f'; ctx.fill();
+  ctx.restore();
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function render(){
+  drawSky();
+  drawParallaxMountains(truck.worldX);
+  drawGround(truck.worldX);
+  for(const c of coins) drawCoin(c, truck.worldX);
+  for(const f of fuelPickups) drawFuel(f, truck.worldX);
+  drawDust(truck.worldX);
+  if(state!=='start') drawTruck();
+}
+
+/* ---------------- Main loop ---------------- */
+let lastT = performance.now();
+function loop(t){
+  const dt = Math.min(0.033, (t-lastT)/1000);
+  lastT = t;
+  if(state==='playing') updatePhysics(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
